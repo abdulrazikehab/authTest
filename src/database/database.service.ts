@@ -6,7 +6,7 @@ export class DatabaseService implements OnModuleInit {
   private prisma: any;
 
   constructor() {
-    const { PrismaClient } = require('.prisma/client');
+    const { PrismaClient } = require('@prisma/client');
     this.prisma = new PrismaClient();
   }
 

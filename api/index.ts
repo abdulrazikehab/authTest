@@ -20,6 +20,15 @@ async function createApp() {
   const logger = new Logger('Bootstrap');
   
   try {
+    // Check required environment variables
+    const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+      logger.error(`❌ Missing required environment variables: ${missingVars.join(', ')}`);
+      throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+    }
+    
     const expressApp = express();
     const app = await NestFactory.create(
       AppModule,
@@ -28,12 +37,6 @@ async function createApp() {
     
     // Enable cookie parser
     app.use(cookieParser());
-    
-    // Verify JWT_SECRET is loaded before starting
-    if (!process.env.JWT_SECRET) {
-      logger.error('❌ JWT_SECRET is not configured in auth service environment variables');
-      throw new Error('JWT_SECRET is not configured');
-    }
     
     // Enable global validation
     app.useGlobalPipes(new ValidationPipe({
@@ -96,8 +99,10 @@ async function createApp() {
     cachedApp = expressApp;
     logger.log('✅ Auth service initialized for Vercel');
     return expressApp;
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to initialize auth service:', error);
+    logger.error('Error stack:', error?.stack);
+    logger.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     throw error;
   }
 }
@@ -106,13 +111,20 @@ export default async function handler(req: express.Request, res: express.Respons
   try {
     const app = await createApp();
     return app(req, res);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error handling request:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
+    console.error('Error stack:', error?.stack);
+    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    
+    // Ensure response hasn't been sent
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? error?.message : undefined,
+        stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+      });
+    }
   }
 }
 
