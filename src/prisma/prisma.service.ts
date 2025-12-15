@@ -9,9 +9,22 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     try {
       // Use @prisma/client instead of .prisma/client for better compatibility
       const { PrismaClient } = require('@prisma/client');
-      this.prisma = new PrismaClient({
+      
+      // Configure Prisma for serverless with connection pooling
+      const prismaOptions: any = {
         log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
-      });
+      };
+      
+      // Add connection pool configuration for serverless
+      if (process.env.VERCEL || process.env.VERCEL_ENV) {
+        prismaOptions.datasources = {
+          db: {
+            url: process.env.DATABASE_URL,
+          },
+        };
+      }
+      
+      this.prisma = new PrismaClient(prismaOptions);
       
       // Register Encryption Middleware
       try {
@@ -32,20 +45,28 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     try {
-      // In serverless environments, connection pooling is handled differently
-      // We'll let Prisma handle connections on-demand
-      if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
-        await this.prisma.$connect();
+      const isServerless = process.env.VERCEL || process.env.VERCEL_ENV;
+      
+      // In serverless, don't connect eagerly - connections are created on-demand
+      if (!isServerless && process.env.NODE_ENV !== 'production') {
+        // Test connection with timeout
+        await Promise.race([
+          this.prisma.$connect(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Connection timeout')), 5000)
+          )
+        ]);
         this.logger.log('Auth Prisma connected to database');
       } else {
         // In Vercel/serverless, connections are managed automatically
-        this.logger.log('Auth Prisma ready (serverless mode)');
+        this.logger.log('Auth Prisma ready (serverless mode - connections will be created on-demand)');
       }
     } catch (error: any) {
       this.logger.error('Failed to connect to Auth database: ' + error?.message);
       this.logger.error('Database URL configured: ' + (process.env.DATABASE_URL ? 'Yes' : 'No'));
+      const isServerless = process.env.VERCEL || process.env.VERCEL_ENV;
       // Don't throw in serverless - let it connect on first query
-      if (process.env.NODE_ENV !== 'production') {
+      if (!isServerless) {
         throw error;
       }
     }
