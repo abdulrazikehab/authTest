@@ -7,24 +7,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
   constructor() {
     try {
-      // Use @prisma/client instead of .prisma/client for better compatibility
-      const { PrismaClient } = require('@prisma/client');
-      
-      // Configure Prisma for serverless with connection pooling
-      const prismaOptions: any = {
-        log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
-      };
-      
-      // Add connection pool configuration for serverless
-      if (process.env.VERCEL || process.env.VERCEL_ENV) {
-        prismaOptions.datasources = {
-          db: {
-            url: process.env.DATABASE_URL,
-          },
-        };
-      }
-      
-      this.prisma = new PrismaClient(prismaOptions);
+      const { PrismaClient } = require('.prisma/client');
+      this.prisma = new PrismaClient({
+        log: ['query', 'info', 'warn', 'error'],
+      });
       
       // Register Encryption Middleware
       try {
@@ -38,37 +24,17 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Auth PrismaClient created successfully');
     } catch (error) {
       this.logger.error('Failed to create Auth PrismaClient: ' + error);
-      this.logger.error('Error details: ' + JSON.stringify(error, null, 2));
       throw error;
     }
   }
 
   async onModuleInit() {
     try {
-      const isServerless = process.env.VERCEL || process.env.VERCEL_ENV;
-      
-      // In serverless, don't connect eagerly - connections are created on-demand
-      if (!isServerless && process.env.NODE_ENV !== 'production') {
-        // Test connection with timeout
-        await Promise.race([
-          this.prisma.$connect(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Connection timeout')), 5000)
-          )
-        ]);
-        this.logger.log('Auth Prisma connected to database');
-      } else {
-        // In Vercel/serverless, connections are managed automatically
-        this.logger.log('Auth Prisma ready (serverless mode - connections will be created on-demand)');
-      }
-    } catch (error: any) {
-      this.logger.error('Failed to connect to Auth database: ' + error?.message);
-      this.logger.error('Database URL configured: ' + (process.env.DATABASE_URL ? 'Yes' : 'No'));
-      const isServerless = process.env.VERCEL || process.env.VERCEL_ENV;
-      // Don't throw in serverless - let it connect on first query
-      if (!isServerless) {
-        throw error;
-      }
+      await this.prisma.$connect();
+      this.logger.log('Auth Prisma connected to database');
+    } catch (error) {
+      this.logger.error('Failed to connect to Auth database: ' + error);
+      throw error;
     }
   }
 

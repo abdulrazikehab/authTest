@@ -4,11 +4,12 @@
     "target": "es2020",
     "lib": ["es2020"],
     "outDir": "dist",
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true
   },
-  "include": ["src/**/*", "api/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "scripts", "prisma", "**/*.spec.ts"]
 }
